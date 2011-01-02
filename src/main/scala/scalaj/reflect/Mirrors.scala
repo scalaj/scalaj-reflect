@@ -7,7 +7,7 @@ object Mirror {
   
   def of(sym: Symbol): Option[Mirror] = sym match {
     case o: ObjectSymbol => Some(ObjectMirror(o))
-    case c: ClassSymbol /*if !refinementClass(c) && !c.isModule*/ => Some(ClassMirror(c))
+    case c: ClassSymbol if !refinementClass(c) && !c.isModule => Some(ClassMirror(c))
     case m: MethodSymbol => Some(MethodMirror(m))
     case a: AliasSymbol => error("not implemented")
     case t: TypeSymbol if !t.isParam && !t.name.matches("_\\$\\d+")=> error("not implemented")
@@ -17,7 +17,8 @@ object Mirror {
 
 sealed trait Mirror {
   def sym: Symbol
-  lazy val children: Seq[Mirror] = sym.children flatMap {Mirror.of}
+  def childSymbols = sym.children
+  lazy val children: Seq[Mirror] = childSymbols flatMap {Mirror.of}
   def name = sym.name
   override def toString = "symbol " + name
 
@@ -33,7 +34,9 @@ case class ClassMirror(sym: ClassSymbol) extends Mirror {
 }
 
 case class ObjectMirror(sym: ObjectSymbol) extends Mirror {
-  val TypeRefType(prefix, classSymbol: ClassSymbol, typeArgs) = o.infoType
+  private[this] val TypeRefType(prefix, classSymbol: ClassSymbol, typeArgs) = sym.infoType
+  override def childSymbols = classSymbol.children
+
   override def toString = "object " + name
 }
 
