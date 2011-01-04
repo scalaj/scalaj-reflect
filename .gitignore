@@ -7,7 +7,6 @@
 CVS/
 .svn/
 .hg/
-build/
 target/
 lib_managed/
 src_managed/
