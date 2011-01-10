@@ -10,16 +10,19 @@ import AutographBook._
 class AutographBookSpec extends SpecificationWithJUnit  {
 
   "check scala signature annotation is defined" in {
-    val tpe = classOf[AutographBook]
-    println(tpe)
-
+    val tpe = classOf[SampleTarget]
     val sig = sigFromType(tpe)
+
+    val decompiledText = sig map decompile getOrElse("couldn't decompile")
+    println(decompiledText)
+    println("=====")
+
     val syms = sig map (symsFromSig) getOrElse Nil
 
     val mirrors = syms flatMap (Mirror.of)
     mirrors foreach { _.printTree() }
     val symNames = mirrors map { _.toString }
-    symNames mustEqual Seq("class AutographBook", "object AutographBook")
+    symNames mustEqual Seq("class SampleTarget", "object SampleTarget")
   }
 
 }

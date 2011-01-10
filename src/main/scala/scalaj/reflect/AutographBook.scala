@@ -4,12 +4,7 @@ import tools.scalap.scalax.rules.scalasig._
 import reflect.ScalaSignature
 import scala.reflect.generic.ByteCodecs
 
-class AutographBook {
-  def someMethod = 42
-}
-
 object AutographBook {
-  case class Foo(x: Int)
 
   def decodeSigBytes(bytes: Array[Byte]): Array[Byte] = {
     val length = ByteCodecs.decode(bytes)
@@ -27,4 +22,7 @@ object AutographBook {
   def sigFromType(tpe: Class[_]) = sigBytesFromType(tpe) map (sigFromBytes)
 
   def symsFromSig(s: ScalaSig) = s.topLevelClasses ++ s.topLevelObjects
+
+  def decompile(s: ScalaSig) =
+    tools.scalap.Main.parseScalaSignature(s, false)
 }

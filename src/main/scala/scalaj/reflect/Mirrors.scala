@@ -61,11 +61,16 @@ case class ObjectMirror(sym: ObjectSymbol) extends ModuleMirror(sym) {
 }
 
 case class MethodMirror(sym: MethodSymbol) extends Mirror {
+  def symType = MethodTypeMirror(sym.infoType)
   override def toString = "def " + name
   override def printTree(indent: Int = 0) : Unit = {
     println(("  " * indent) + toString)
   }
 }
+
+case class ParamMirror(sym: MethodSymbol) extends Mirror {
+  def symType = SimpleTypeMirror(sym.infoType)
+  override def toString = "param " + name
 
 
 
