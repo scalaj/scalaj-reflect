@@ -1,54 +1,129 @@
 package scalaj.reflect
 
 import tools.scalap.scalax.rules.scalasig.{Type => SymType, _}
+import tools.scalap.scalax.util.StringUtil
 
+object TypeMirrors {
+
+}
 sealed abstract trait TypeMirror {
   val symType: SymType
 }
 
-case class SimpleTypeMirror(symType: SymType) extends TypeMirror
+case class SimpleTypeMirror(symType: SymType) extends TypeMirror {
+  import Mirror.processName
+  
+  def innerToString(t: SymType, sep: String) = symType match {
+    case ThisType(symbol) => sep + processName(symbol.path) + ".type"
+    case SingleType(typeRef, symbol) => sep + processName(symbol.path) + ".type"
+    case ConstantType(constant) => sep + (constant match {
+      case null => "Null"
+      case _: Unit => "Unit"
+      case _: Boolean => "Boolean"
+      case _: Byte => "Byte"
+      case _: Char => "Char"
+      case _: Short => "Short"
+      case _: Int => "Int"
+      case _: Long => "Long"
+      case _: Float => "Float"
+      case _: Double => "Double"
+      case _: String => "String"
+      case c: Class[_] => "Class[" + c.getComponentType.getCanonicalName.replace("$", ".") + "]"
+    })
+//    case TypeRefType(prefix, symbol, typeArgs) => sep + (symbol.path match {
+//      case "scala.<repeated>" => flags match {
+//        case TypeFlags(true) => toString(typeArgs.head) + "*"
+//        case _ => "scala.Seq" + typeArgString(typeArgs)
+//      }
+//      case "scala.<byname>" => "=> " + toString(typeArgs.head)
+//      case _ => {
+//        val path = StringUtil.cutSubstring(symbol.path)(".package") //remove package object reference
+//        StringUtil.trimStart(processName(path) + typeArgString(typeArgs), "<empty>.")
+//      }
+//    })
+//    case TypeBoundsType(lower, upper) => {
+//      val lb = toString(lower)
+//      val ub = toString(upper)
+//      val lbs = if (!lb.equals("scala.Nothing")) " >: " + lb else ""
+//      val ubs = if (!ub.equals("scala.Any")) " <: " + ub else ""
+//      lbs + ubs
+//    }
+//    case RefinedType(classSym, typeRefs) => sep + typeRefs.map(toString).mkString("", " with ", "")
+//    case ClassInfoType(symbol, typeRefs) => sep + typeRefs.map(toString).mkString(" extends ", " with ", "")
+//    case ClassInfoTypeWithCons(symbol, typeRefs, cons) => sep + typeRefs.map(toString).
+//            mkString(cons + " extends ", " with ", "")
+//
+//    case ImplicitMethodType(resultType, _) => toString(resultType, sep)
+//    case MethodType(resultType, _) => toString(resultType, sep)
+//
+//    case PolyType(typeRef, symbols) => typeParamString(symbols) + toString(typeRef, sep)
+//    case PolyTypeWithCons(typeRef, symbols, cons) => typeParamString(symbols) + processName(cons) + toString(typeRef, sep)
+//    case AnnotatedType(typeRef, attribTreeRefs) => {
+//      toString(typeRef, sep)
+//    }
+//    case AnnotatedWithSelfType(typeRef, symbol, attribTreeRefs) => toString(typeRef, sep)
+//    //case DeBruijnIndexType(typeLevel, typeIndex) =>
+//    case ExistentialType(typeRef, symbols) => {
+//      val refs = symbols.map(toString _).filter(!_.startsWith("_")).map("type " + _)
+//      toString(typeRef, sep) + (if (refs.size > 0) refs.mkString(" forSome {", "; ", "}") else "")
+//    }
+    case _ => sep + t.toString
+  }
+
+  override def toString = innerToString(symType, "")
+}
+
+case class RefTypeMirror(symType: TypeRefType) extends TypeMirror {
+  val targetSymbol = symType.symbol
+  override def toString = Mirror.processName(targetSymbol.name)
+}
+
+case class UnknownTypeMirror(symType: SymType) extends TypeMirror {
+  override def toString = "UNKNOWN" + symType.toString
+}
 
 case class MethodTypeMirror(symType: SymType) extends TypeMirror {
 
-//  def _pmt(mt: Type {def resultType: Type; def paramSymbols: Seq[Symbol]}) = {
-//    val paramEntries = mt.paramSymbols.map({
-//      case ms: MethodSymbol => ms.name + " : " + toString(ms.infoType)(TypeFlags(true))
-//      case _ => "^___^"
-//    })
-//
-//    // Print parameter clauses
-//    print(paramEntries.mkString(
-//      "(" + (mt match {case _: ImplicitMethodType => "implicit "; case _ => ""})
-//      , ", ", ")"))
-//
-//    // Print result type
-//    mt.resultType match {
-//      case mt: MethodType => printMethodType(mt, printResult)({})
-//      case imt: ImplicitMethodType => printMethodType(imt, printResult)({})
-//      case x => if (printResult) {
-//        print(" : ");
-//        printType(x)
-//      }
-//    }
-//  }
-
-  def processOne(singleSymType: SymType) = singleSymType match {
-    //single non-implicit param block
-    case mt@MethodType(resType, paramSymbols) => SimpleParamBlockTypeMirror(mt)
-    //single implicit param block
-    case mt@ImplicitMethodType(resType, paramSymbols) => ImplicitParamBlockTypeMirror(mt)
-    //todo: consider other method types
-    case x => error(x)
+  val typeParams: Seq[TypeParamMirror] = symType match {
+    //multiple param blocks
+    case pt@PolyType(mt, typeParams) => typeParams map { TypeParamMirror.apply }
+    case _ => Seq.empty
   }
 
-  val blocks: Seq[ParamBlockTypeMirror] = symType match {
-    //multiple param blocks
-    case pt@PolyType(mt, typeParams) => typeParams map { processOne }
-    case x => Seq(processOne(x))
+  val isImplicit = symType.isInstanceOf[ImplicitMethodType]
+
+  private def wrap(resultType: SymType, paramSymbols: Seq[Symbol]) =
+    (MethodTypeMirror(resultType), paramSymbols map {ParamMirror.apply})
+
+  val resultType: TypeMirror = symType match {
+    case MethodType(rt, _) => MethodTypeMirror(rt)
+    case ImplicitMethodType(rt, _) => MethodTypeMirror(rt)
+    case rt @ TypeRefType(_, _, _) => RefTypeMirror(rt)
+    case x => SimpleTypeMirror(x)
+  }
+
+  def paramToMirror(param: Symbol) = param match {
+    case ms: MethodSymbol => ParamMirror(ms)
+    case _ => UnknownMirror(param)
+  }
+
+  val paramSymbols = symType match {
+    case MethodType(_, ps) => ps map {paramToMirror}
+    case ImplicitMethodType(_, ps) => ps map {paramToMirror}
+    case x => Seq.empty
+  }
+
+  def resultToString = resultType match {
+    case MethodTypeMirror(_) => resultType.toString
+    case _ => ": " + resultType.toString
   }
 
   override def toString = {
-    blocks.mkString("(", "", ")")
+    paramSymbols.map{_.name}.mkString(
+      if(isImplicit) "(implicit " else "(",
+      ",",
+      ")"
+    ) + resultToString
   }
 }
 
@@ -58,7 +133,7 @@ trait ParamBlockTypeMirror {
 
   def params: Seq[ParamMirror] = paramSymbols map {
     case ms: MethodSymbol => ParamMirror(ms)
-    case ps => error(ps)
+    case ps => error(ps.toString)
   }
 }
 

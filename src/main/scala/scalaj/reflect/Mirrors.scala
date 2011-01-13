@@ -13,6 +13,49 @@ object Mirror {
     case t: TypeSymbol if !t.isParam && !t.name.matches("_\\$\\d+")=> error("not implemented")
     case s => None
   }
+
+  import java.util.regex.Pattern
+
+  val _syms = Map(
+    "\\$bar" -> "|",
+    "\\$tilde" -> "~",
+    "\\$bang" -> "!",
+    "\\$up" -> "^",
+    "\\$plus" -> "+",
+    "\\$minus" -> "-",
+    "\\$eq" -> "=",
+    "\\$less" -> "<",
+    "\\$times" -> "*",
+    "\\$div" -> "/",
+    "\\$bslash" -> "\\\\",
+    "\\$greater" -> ">",
+    "\\$qmark" -> "?",
+    "\\$percent" -> "%",
+    "\\$amp" -> "&",
+    "\\$colon" -> ":",
+    "\\$u2192" -> "?",
+    "\\$hash" -> "#")
+  val pattern = Pattern.compile(_syms.keys.mkString("", "|", ""))
+  val placeholderPattern = "_\\$(\\d)+"
+
+  private def stripPrivatePrefix(name: String) = {
+    val i = name.lastIndexOf("$$")
+    if (i > 0) name.substring(i + 2) else name
+  }
+
+  def processName(name: String) = {
+    val stripped = stripPrivatePrefix(name)
+    val m = pattern.matcher(stripped)
+    var temp = stripped
+    while (m.find) {
+      val key = m.group
+      val re = "\\" + key
+      temp = temp.replaceAll(re, _syms(re))
+    }
+    val result = temp.replaceAll(placeholderPattern, "_")
+    scala.reflect.NameTransformer.decode(result)
+  }
+
 }
 
 sealed trait Mirror {
@@ -27,6 +70,8 @@ sealed trait Mirror {
     children foreach {_.printTree(indent+1)}
   }
 }
+
+case class UnknownMirror(sym: Symbol) extends Mirror
 
 abstract class ModuleMirror(sym: Symbol) extends Mirror {
   private[this] val CONSTRUCTOR_NAME = "<init>"
@@ -62,16 +107,19 @@ case class ObjectMirror(sym: ObjectSymbol) extends ModuleMirror(sym) {
 
 case class MethodMirror(sym: MethodSymbol) extends Mirror {
   def symType = MethodTypeMirror(sym.infoType)
-  override def toString = "def " + name
+  override def toString = "def " + name + symType.toString
   override def printTree(indent: Int = 0) : Unit = {
     println(("  " * indent) + toString)
   }
 }
 
-case class ParamMirror(sym: MethodSymbol) extends Mirror {
-  def symType = SimpleTypeMirror(sym.infoType)
+case class ParamMirror(sym: Symbol) extends Mirror {
+//  def symType = SimpleTypeMirror(sym.infoType)
   override def toString = "param " + name
+}
 
-
+case class TypeParamMirror(sym: TypeSymbol) extends Mirror {
+  override def toString = "type param " + name
+}
 
 
