@@ -1,125 +1,250 @@
 package scalaj.reflect
 
-import tools.scalap.scalax.rules.scalasig._
+import tools.scalap.scalax.rules.scalasig.{Type => SymType, _}
 
+import Collatable._
+
+/**
+ * Mirrors symbols; anything with a name that can be referenced elsewhere
+ */
 object Mirror {
-  private def refinementClass(c: ClassSymbol) = c.name == "<refinement>"
-  
-  def of(sym: Symbol): Option[Mirror] = sym match {
-    case o: ObjectSymbol => Some(ObjectMirror(o))
-    case c: ClassSymbol if !refinementClass(c) && !c.isModule => Some(ClassMirror(c))
-    case m: MethodSymbol => Some(MethodMirror(m))
-    case a: AliasSymbol => error("not implemented")
-    case t: TypeSymbol if !t.isParam && !t.name.matches("_\\$\\d+")=> error("not implemented")
-    case s => None
+  import NameHelpers._
+  val cache = collection.mutable.Map.empty[Symbol, Mirror]
+
+  private def generateFor(sym: Symbol): Mirror = sym match {
+    case o: ObjectSymbol => ObjectMirror(o)
+    case c: ClassSymbol if !isRefinementClass(c) && !c.isModule => ClassMirror(c)
+    case m: MethodSymbol => MethodMirror(m)
+//    case t: TypeSymbol if !t.isParam && !t.name.matches("_\\$\\d+")=> error("not implemented")
+    case x => RawSymbolMirror(x)
   }
 
-  import java.util.regex.Pattern
-
-  val _syms = Map(
-    "\\$bar" -> "|",
-    "\\$tilde" -> "~",
-    "\\$bang" -> "!",
-    "\\$up" -> "^",
-    "\\$plus" -> "+",
-    "\\$minus" -> "-",
-    "\\$eq" -> "=",
-    "\\$less" -> "<",
-    "\\$times" -> "*",
-    "\\$div" -> "/",
-    "\\$bslash" -> "\\\\",
-    "\\$greater" -> ">",
-    "\\$qmark" -> "?",
-    "\\$percent" -> "%",
-    "\\$amp" -> "&",
-    "\\$colon" -> ":",
-    "\\$u2192" -> "?",
-    "\\$hash" -> "#")
-  val pattern = Pattern.compile(_syms.keys.mkString("", "|", ""))
-  val placeholderPattern = "_\\$(\\d)+"
-
-  private def stripPrivatePrefix(name: String) = {
-    val i = name.lastIndexOf("$$")
-    if (i > 0) name.substring(i + 2) else name
-  }
-
-  def processName(name: String) = {
-    val stripped = stripPrivatePrefix(name)
-    val m = pattern.matcher(stripped)
-    var temp = stripped
-    while (m.find) {
-      val key = m.group
-      val re = "\\" + key
-      temp = temp.replaceAll(re, _syms(re))
-    }
-    val result = temp.replaceAll(placeholderPattern, "_")
-    scala.reflect.NameTransformer.decode(result)
-  }
-
+  def of(sym: Symbol): Mirror = cache.getOrElseUpdate(sym, generateFor(sym))
 }
 
-sealed trait Mirror {
+sealed trait Mirror
+
+/**
+ * A symbol is ANY atomic entity with a name, such as:
+ * * T
+ * * Int
+ * * someProperty
+ * * aMethod
+ * * MyClass
+ * * ...
+ */
+object SymbolMirror {
+  def apply(sym: Symbol) = sym match {
+    case m: MethodSymbol => MethodMirror(m)
+    case t: TypeSymbol => TypeSymbolMirror(t)
+    case x => RawSymbolMirror(x)
+  }
+}
+
+sealed trait SymbolMirror extends Mirror {
   def sym: Symbol
-  def childSymbols = sym.children
-  lazy val children: Seq[Mirror] = childSymbols flatMap {Mirror.of}
   def name = sym.name
-  override def toString = "symbol " + name
+  override def toString = "<<symbol " + name + ": " + sym.getClass.getName + ">>"
+}
 
-  def printTree(indent: Int = 0) : Unit = {
-    println(("  " * indent) + toString)
-    children foreach {_.printTree(indent+1)}
+case class TypeSymbolMirror(sym: TypeSymbol) extends SymbolMirror {
+  override def toString = name
+}
+
+case class RawSymbolMirror(sym: Symbol) extends SymbolMirror
+
+
+object TypeMirror {
+  def apply(tpe: SymType) = tpe match {
+//    case mt: MethodType => MethodMirror(mt)
+    case trt: TypeRefType => TypeRefMirror(trt)
+    case pt: PolyType => PolyTypeMirror(pt)
+    case x => RawTypeMirror(x)
   }
 }
 
-case class UnknownMirror(sym: Symbol) extends Mirror
-
-abstract class ModuleMirror(sym: Symbol) extends Mirror {
-  private[this] val CONSTRUCTOR_NAME = "<init>"
-  
-  def classSymbol: ClassSymbol
-  override def childSymbols = classSymbol.children
-  def constructors = children.collect{ case m: MethodMirror if m.name  == CONSTRUCTOR_NAME => m }
-  def innerObjects = children.collect{ case o: ObjectMirror => o }
-  def innerClasses = children.collect{ case c: ClassMirror => c }
-  def innerModules = innerObjects ++ innerClasses
-  def methods = children.collect{ case m: MethodMirror if m.name  != CONSTRUCTOR_NAME => m}
-
-  override def printTree(indent: Int = 0) : Unit = {
-    println(("  " * indent) + toString)
-    constructors foreach {_.printTree(indent+1)}
-    innerObjects foreach {_.printTree(indent+1)}
-    innerClasses foreach {_.printTree(indent+1)}
-    methods foreach {_.printTree(indent+1)}
-  }
-
+sealed trait TypeMirror extends Mirror {
+  def tpe: SymType
+  override def toString = "<<symbol type:" + tpe.getClass.getName + ">>"
 }
 
-case class ClassMirror(sym: ClassSymbol) extends ModuleMirror(sym) {
-  val classSymbol = sym
+case class RawTypeMirror(tpe: SymType) extends TypeMirror
+
+case class TypeRefMirror(tpe: TypeRefType) extends TypeMirror {
+  override def toString = tpe.symbol.name
+}
+
+case class PolyTypeMirror(tpe: PolyType) extends TypeMirror {
+  val typeRef = TypeMirror(tpe.typeRef)
+  val rawSymbols = tpe.symbols
+  val symbols = rawSymbols map { SymbolMirror(_) }
+  override def toString = symbols.mkString("[", ", ", "]") + typeRef.toString
+}
+
+/**
+ * Anything that can hold *publicly visible* members.
+ * "members" being classes, defs, vals, etc.
+ */
+abstract class MemberContainerMirror extends SymbolMirror {
+  def memberSymbols: Seq[Symbol]
+
+  lazy val allMethodSymbols = memberSymbols collect { case ms @ MethodSymbol(_,_) => ms }
+  lazy val reallyTrulyAllMethods = allMethodSymbols map { MethodMirror(_) }
+  lazy val allNaturalMethods = reallyTrulyAllMethods filterNot { _.isSynthetic }
+  lazy val allSyntheticMethods = reallyTrulyAllMethods filter { _.isSynthetic }
+
+//  val (innerClasses, innerObjects, allMethods, others) = members collate {
+//    case x: ClassMirror => x
+//  } andThen {
+//    case x: ObjectMirror => x
+//  } andThen {
+//    case x: MethodMirror => x
+//  } toTuple
+//
+//  def innerClasses = members collect {}
+//  def innerObjects = members collect {  }
+//  def allMethods = members collect { case x: MethodMirror => x }
+//
+//  //when dealing with scala classes and @beanproperty, should only return
+//  //the scala-native variants
+//  def allAccessors = members collect { case x: MethodMirror if !x.isInstanceOf[PropertyMirror] => x }
+//  def beanAccessors = members collect { case x: MethodMirror if !x.isInstanceOf[PropertyMirror] => x }
+//  def scalaAccessors = members collect { case x: MethodMirror if !x.isInstanceOf[PropertyMirror] => x }
+//
+//  def vals = members collect { case x: ValMirror => x }
+//  def vars = members collect { case x: VarMirror => x }
+}
+
+case class ClassMirror(sym: ClassSymbol) extends MemberContainerMirror {
+  val memberSymbols = sym.children
   override def toString = "class " + name
   //def methods: Seq[MethodMirror] =
 }
 
-case class ObjectMirror(sym: ObjectSymbol) extends ModuleMirror(sym) {
+case class ObjectMirror(sym: ObjectSymbol) extends MemberContainerMirror {
   val TypeRefType(prefix, classSymbol: ClassSymbol, typeArgs) = sym.infoType
+  val memberSymbols = classSymbol.children
   override def toString = "object " + name
 }
 
-case class MethodMirror(sym: MethodSymbol) extends Mirror {
-  def symType = MethodTypeMirror(sym.infoType)
-  override def toString = "def " + name + symType.toString
-  override def printTree(indent: Int = 0) : Unit = {
-    println(("  " * indent) + toString)
+/**
+ * Anything that takes parameters: Constructors, Setters and Methods
+ */
+case class MethodMirror(val sym: MethodSymbol) extends SymbolMirror {
+  val isSynthetic = sym.isSynthetic
+  val isAccessor = sym.isAccessor
+  val isConstructor = name == NameHelpers.CONSTRUCTOR_NAME
+
+  val rawType = sym.infoType
+  val (refType, typeParamSymbols) = rawType match {
+    case PolyType(refType, typeParamSymbols) => (refType, typeParamSymbols)
+    case x => (x, Seq.empty[Symbol])
+  }
+
+  val typeParams: Seq[SymbolMirror] = typeParamSymbols map SymbolMirror.apply
+
+  private[this] val returnChain = Iterator.iterate(Some(refType): Option[SymType]){
+    case Some(MethodType(rt, _))          => Some(rt)
+    case Some(ImplicitMethodType(rt, _))  => Some(rt)
+    case _                                => None
+  } takeWhile (None !=) map (_.get) map {
+    case mt: MethodType            => ExplicitParamBlockMirror(mt)
+    case imt: ImplicitMethodType   => ImplicitParamBlockMirror(imt)
+    case x                         => TypeMirror(x)
+  } toList
+
+  val paramBlocks = returnChain collect { case pbm: ParamBlockMirror => pbm }
+  val returnType = returnChain.last
+
+  def flatParams = paramBlocks flatMap (_.params)
+  override def toString = {
+    val prefix = (
+      Some("SYN").filter(_ => isSynthetic) ::
+      Some("ACC").filter(_ => isAccessor) ::
+      Some("CTOR").filter(_ => isConstructor) ::
+      Nil).flatten mkString " "
+
+    val typeParamsStr = if (typeParams.isEmpty) "" else typeParams.mkString("[",", ","]")
+    val paramBlocksStr = paramBlocks mkString ""
+    prefix + "method " + name + typeParamsStr + paramBlocks.mkString("") + ": " + returnType.toString
+  }
+  // TODO: def invoke(args: Object*)
+}
+
+//TODO: DefMirror, ValMirror, VarMirror, ConstructorMirror
+/**
+ * A val or a var, also (potentially) bean properties
+ */
+//trait PropertyMirror extends Mirror {
+//  def isGettable: Boolean
+//  def isSettable: Boolean
+//}
+//
+//case class ValMirror(getter0: MethodMirror) extends PropertyMirror {
+//  val getter = Some(getter0)
+//  val setter = None
+//}
+//
+//case class VarMirror(sym: Symbol) extends PropertyMirror {
+//  val getter = None
+//  val setter = None
+//
+//  private val siblings = sym.parent map {_.children} getOrElse Nil
+//  val setter = siblings.collect{
+//    case m: MethodSymbol if m.name == sym.name + "_$eq" => m
+//  }.head
+//}
+
+
+abstract class ParamBlockMirror(paramSymbols: Seq[Symbol]) extends TypeMirror {
+  val params = paramSymbols map {
+    case ms: MethodSymbol => ParamMirror(ms)
+    case x => FunkyParamMirror(x)
   }
 }
 
-case class ParamMirror(sym: Symbol) extends Mirror {
-//  def symType = SimpleTypeMirror(sym.infoType)
-  override def toString = "param " + name
+case class ExplicitParamBlockMirror(val tpe: MethodType) extends ParamBlockMirror(tpe.paramSymbols) {
+  override def toString = params.mkString("(", ", ", ")")
+}
+case class ImplicitParamBlockMirror(val tpe: ImplicitMethodType) extends ParamBlockMirror(tpe.paramSymbols) {
+  override def toString = params.mkString("(implicit ", ", ", ")")
 }
 
-case class TypeParamMirror(sym: TypeSymbol) extends Mirror {
-  override def toString = "type param " + name
+case class ParamMirror(sym: MethodSymbol) extends SymbolMirror {
+  def symType = TypeMirror(sym.infoType)
+  override def toString = name + ": " + symType.toString
 }
+
+//normally params are MethodSymbols, I know of no exceptions
+//but just in case...
+case class FunkyParamMirror(sym: Symbol) extends SymbolMirror {
+  override def toString = name + ": ^__^"
+}
+
+
+
+/**
+ * Anything that takes a type. Some classes, methods and aliases
+ */
+trait TypeParamaterizedMirror extends Mirror {
+  def typeParams: Seq[Object]
+}
+
+
+
+
+/**
+ * Anything that has a constructor.
+ * Basically just classes at the moment.
+ * (maybe traits in the future, who knows?)
+ */
+//trait ConstructableMirror extends Mirror {
+//  def primaryConstructor: MethodMirror
+//  def secondaryConstructors: Seq[MethodMirror]
+//  def allConstructors = primaryConstructor +: secondaryConstructors
+//}
+
+
+
 
 

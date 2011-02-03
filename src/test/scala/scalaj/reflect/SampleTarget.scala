@@ -8,6 +8,8 @@ class SampleTarget {
 
   implicit val implicitString = "xxx"
 
+  var simpleVar = 42
+
   def simpleMethod(arg: String) = "xxx"
   def defaultArgMethod(arg: String = "default") = "xxx"
   def implicitArgMethod(implicit arg: String) = "xxx"

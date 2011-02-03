@@ -19,10 +19,14 @@ class AutographBookSpec extends SpecificationWithJUnit  {
 
     val syms = sig map (symsFromSig) getOrElse Nil
 
-    val mirrors = syms flatMap (Mirror.of)
-    mirrors foreach { _.printTree() }
+    val mirrors = syms map (Mirror.of)
+    mirrors collect { case mcm: MemberContainerMirror => mcm } foreach { mcm =>
+      println(mcm.toString)
+      mcm.reallyTrulyAllMethods map (_.toString) foreach {println}
+    }
     val symNames = mirrors map { _.toString }
-    symNames mustEqual Seq("class SampleTarget", "object SampleTarget")
+//    symNames mustEqual Seq("class SampleTarget", "object SampleTarget")
+    symNames mustEqual Seq("class SampleTarget")
   }
 
 }

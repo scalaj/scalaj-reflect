@@ -4,7 +4,7 @@ class ScalajProject(info: ProjectInfo) extends DefaultProject(info) with IdeaPro
   val mavenLocal = "Local Maven Repository" at "file://"+Path.userHome+"/.m2/repository"
   
   override def compileOptions = Seq(Deprecation, Unchecked)
-  override def managedStyle = ManagedStyle.Maven
+  //override def managedStyle = ManagedStyle.Maven
 
   val scalap = "org.scala-lang" % "scalap" % "2.8.1" withSources()
   val specs = "org.scala-tools.testing" %% "specs" % "1.6.6"
