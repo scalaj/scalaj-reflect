@@ -1,7 +1,12 @@
 package scalaj.reflect
 
 
-class SampleTarget {
+class SampleTarget(param1: String, param2: Int) {
+
+  def this(param2a: Float) = this("float", param2a.toInt) 
+
+  type StringAlias = String
+  
   class Foo(val param: String)
 
 //  case class Bar(val param: String)
