@@ -4,6 +4,8 @@ import tools.scalap.scalax.rules.scalasig.{Type => SymType, _}
 
 object SymbolTreePrinter {
 
+  def quote(s: String) = "\"" + s + "\""
+
   class PrevSeen(symbols: Seq[Symbol] = Seq.empty, types: Seq[SymType] = Seq.empty) {
     def +(s: Symbol): PrevSeen = new PrevSeen(s +: symbols, types)
     def +(t: SymType): PrevSeen = new PrevSeen(symbols, t +: types)
@@ -13,14 +15,23 @@ object SymbolTreePrinter {
 
     override def toString = symbols.map(_.path).mkString("symbols: ", ", ", "")
   }
+
   private def optNest[T](input: (String, Option[T]))(implicit prevSeen: PrevSeen = new PrevSeen) = input match {
     case (name, Some(value)) => nest(name->value)
     case _ => ""
   }
 
+  private def nestAll[T](input: (String, Seq[T]))(implicit prevSeen: PrevSeen = new PrevSeen) = input match {
+    case (name, values) => values.zipWithIndex map { case (v,i) =>
+      val indexedName = "%s %d/%d".format(name, i+1, values.size)
+      nest(indexedName->v)
+    } mkString ""
+  }
+
   private def nest[T](input: (String, T))(implicit prevSeen: PrevSeen = new PrevSeen) = {
     val (name, x) = input
     val nested = x match {
+      case s: SymbolInfoSymbol if prevSeen contains s =>  s.path + " (already seen at #" + s.entry.index + ")"
       case s: Symbol if prevSeen contains s =>  s.path + " (already seen)"
       case t: SymType if prevSeen contains t => "(type already seen)"
       case null => "<null>"
@@ -53,10 +64,10 @@ object SymbolTreePrinter {
       "ConstantType" +
         nest("constant"->constant)
     case TypeRefType(prefix, symbol, typeArgs) =>
-      "TypeRefType" +
+      "TypeRefType prefix = " +
         nest("prefix"->prefix) +
         nest("symbol"->symbol) +
-        (typeArgs map { ta => nest("typeArg"->ta) } mkString "")
+        nestAll("typeArg"->typeArgs)
     case TypeBoundsType(lower, upper) =>
       "TypeBoundsType" +
         nest("lower"->lower) +
@@ -68,40 +79,38 @@ object SymbolTreePrinter {
     case ClassInfoType(symbol, typeRefs) =>
       "ClassInfoType" +
         nest("symbol"->symbol) +
-        (typeRefs map { tr => nest("typeRef"->tr) } mkString "")
+        nestAll("typeRef"->typeRefs)
     case ClassInfoTypeWithCons(symbol, typeRefs, cons) =>
       "ClassInfoTypeWithCons" +
         nest("symbol"->symbol) +
-        (typeRefs map { tr => nest("typeRef"->tr) } mkString "") +
+        nestAll("typeRef"->typeRefs) +
         nest("cons"->cons)
     case MethodType(resultType, paramSymbols) =>
       "MethodType" +
         nest("resultType"->resultType) +
-//        nest("paramSymbols"->paramSymbols)
-        (paramSymbols map { ps => nest("paramSymbol"->ps) } mkString "")
+        nestAll("paramSymbol"->paramSymbols)
     case PolyType(typeRef, symbols) =>
       "PolyType" +
         nest("typeRef"->typeRef) +
-//        nest("symbols"->symbols)
-        (symbols map { s => nest("symbol"->s) } mkString "")
+        nestAll("symbol"->symbols)
     case PolyTypeWithCons(typeRef, symbols, cons) =>
       "PolyTypeWithCons" +
         nest("typeRef"->typeRef) +
-        (symbols map { s => nest("symbol"->s) } mkString "") +
+        nestAll("symbol"->symbols) +
         nest("cons"->cons)
     case ImplicitMethodType(resultType, paramSymbols) =>
       "ImplicitMethodType" +
         nest("resultType"->resultType) +
-        (paramSymbols map { ps => nest("paramSymbol"->ps) } mkString "")
+        nestAll("paramSymbol"->paramSymbols)
     case AnnotatedType(typeRef, attribTreeRefs) =>
       "AnnotatedType" +
         nest("typeRef"->typeRef) +
-        (attribTreeRefs map { atr => nest("attribTreeRef"->atr) } mkString "")
+        nestAll("attribTreeRef"->attribTreeRefs)
     case AnnotatedWithSelfType(typeRef, symbol, attribTreeRefs) =>
       "AnnotatedWithSelfType" +
         nest("typeRef"->typeRef) +
         nest("symbol"->symbol) +
-        (attribTreeRefs map { atr => nest("attribTreeRef"->atr) } mkString "")
+        nestAll("attribTreeRef"->attribTreeRefs)
     case DeBruijnIndexType(typeLevel, typeIndex) =>
       "DeBruijnIndexType" +
         nest("typeLevel"->typeLevel) +
@@ -109,7 +118,7 @@ object SymbolTreePrinter {
     case ExistentialType(typeRef, symbols) =>
       "ExistentialType" +
         nest("typeRef"->typeRef) +
-        (symbols map { s => nest("symbol"->s) } mkString "")
+        nestAll("symbol"->symbols)
   }
 
   def mkSymbolTree(sym: Symbol)(implicit prevSeen: PrevSeen = new PrevSeen): String = sym match {
@@ -135,6 +144,5 @@ object SymbolTreePrinter {
     nest("infoType"->sym.infoType)
   }
 
-  def quote(s: String) = "\"" + s + "\""
 
 }
