@@ -45,15 +45,12 @@ class AutographBookSpec extends SpecificationWithJUnit  {
       val paramStrings = params map {p => p.name + ": " + p.symType.toString}
       println("simpleMethod params = " + paramStrings.mkString(", "))
       println("first param =")
-      println (SymbolTreePrinter mkTree params.head.sym)
+      println (SymbolTreePrinter mkTree params.head)
     } catch {
       case e: Exception =>
         println(e.getMessage)
         e.printStackTrace
     }
-
-
-
 
     //The mirror of the type of the first arg in simpleMethod(arg: String)
     try {
@@ -62,7 +59,7 @@ class AutographBookSpec extends SpecificationWithJUnit  {
       val paramStrings = params map {p => p.name + ": " + p.symType.toString}
       println("genericMethod params = " + paramStrings.mkString(", "))
       println("first param =")
-      println (SymbolTreePrinter mkTree params.head.sym)
+      println (SymbolTreePrinter mkTree params.head)
     } catch {
       case e: Exception =>
         println(e.getMessage)
