@@ -1,7 +1,6 @@
-package scalaj.reflect
+package scalaj.reflect.targets
 
-
-class SampleTarget(param1: String, param2: Int) {
+class BasicSample(param1: String, param2: Int) {
 
   def this(param2a: Float) = this("float", param2a.toInt) 
 

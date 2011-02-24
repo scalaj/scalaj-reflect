@@ -25,4 +25,35 @@ object AutographBook {
 
   def decompile(s: ScalaSig) =
     tools.scalap.Main.parseScalaSignature(s, false)
+
+  def safeGetClass(name: String): Option[Class[_]] = {
+    try Some(Class forName name) catch { case e: Exception => None }
+  }
+
+  /**
+   * Given a string, will return a `Class[_] -> String` representing the longest possible
+   * match that's a valid class name, paired with the remainder of the string.
+   */
+
+  def resolveClassAndRemainder(path: String) = {
+    val splitPoints = path.zipWithIndex collect {case ('.',i) => i}
+    val splits = (path->"") +: (splitPoints.reverse map {path.splitAt} map { case (a,b) => (a,b.tail)})
+    splits.view flatMap { case (l,r) => safeGetClass(l) map (_ -> r) } headOption
+  }
+
+  def resolveExternal(path: String) = {
+    resolveClassAndRemainder(path) map { resolv =>
+      val (cls, remainder) = resolv
+      val sig = sigFromType(cls)
+      val syms = sig.toSeq flatMap { _.symbols } collect {
+        case sym: AliasSymbol if sym.name == remainder => sym
+      }
+      syms
+    }
+  }
+
+  def deAlias(sym: AliasSymbol) = {
+    sym.infoType
+  }
+
 }

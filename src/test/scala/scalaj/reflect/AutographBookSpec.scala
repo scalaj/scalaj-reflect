@@ -10,7 +10,7 @@ import tools.scalap.scalax.rules.scalasig._
 class AutographBookSpec extends SpecificationWithJUnit  {
 
   "check scala signature annotation is defined" in {
-    val tpe = classOf[SampleTarget]
+    val tpe = classOf[targets.BasicSample]
     val sig = sigFromType(tpe)
 
     val decompiledText = sig map decompile getOrElse("couldn't decompile")
@@ -38,36 +38,6 @@ class AutographBookSpec extends SpecificationWithJUnit  {
       "genericMethod",
       "viewBoundMethod")
 
-
-    try {
-      val method = tgtMirror.allDefs.find(_.name=="simpleMethod").get
-      val params = method.flatParams
-      val paramStrings = params map {p => p.name + ": " + p.symType.toString}
-      println("simpleMethod params = " + paramStrings.mkString(", "))
-      println("first param =")
-      println (SymbolTreePrinter mkTree params.head)
-    } catch {
-      case e: Exception =>
-        println(e.getMessage)
-        e.printStackTrace
-    }
-
-    //The mirror of the type of the first arg in simpleMethod(arg: String)
-    try {
-      val method = tgtMirror.allDefs.find(_.name=="genericMethod").get
-      val params = method.flatParams
-      val paramStrings = params map {p => p.name + ": " + p.symType.toString}
-      println("genericMethod params = " + paramStrings.mkString(", "))
-      println("first param =")
-      println (SymbolTreePrinter mkTree params.head)
-    } catch {
-      case e: Exception =>
-        println(e.getMessage)
-        e.printStackTrace
-    }
-
-//    println("simpleMethod param types (java) = " + simpleMethod.flatParams.map(_.javaType))
-
     val constructors = tgtMirror.constructors
     println("constructors = " + (constructors.map(_.method) mkString ", "))
     constructors.size mustEqual 2
@@ -91,10 +61,10 @@ class AutographBookSpec extends SpecificationWithJUnit  {
     typeAliases mustEqual Seq("StringAlias")
 
 //    symNames mustEqual Seq("class SampleTarget", "object SampleTarget")
-    tgtMirror.toString mustEqual "class SampleTarget"
+    tgtMirror.toString mustEqual "class BasicSample"
 
-    tgtMirror.name mustEqual "SampleTarget"
-    tgtMirror.qualifiedName mustEqual "scalaj.reflect.SampleTarget"
+    tgtMirror.name mustEqual "BasicSample"
+    tgtMirror.qualifiedName mustEqual "scalaj.reflect.targets.BasicSample"
   }
 
 }
