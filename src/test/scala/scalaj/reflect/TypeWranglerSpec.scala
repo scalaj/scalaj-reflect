@@ -6,11 +6,14 @@ import org.specs.SpecificationWithJUnit
 
 
 class TypeWranglerSpec extends SpecificationWithJUnit  {
-  "dynamically lookup a Seq[String] manifest" in {
-    val actual : Manifest[_] = wrangler.manifestOf(classOf[Seq[String]])
-    val expected : Manifest[_] = manifest[Seq[String]]
+  "the TypeWrangler" should {
+    "dynamically lookup a Seq[String] manifest" in {
+      val actual : Manifest[_] = wrangler.manifestOf(classOf[Seq[String]])
+      val expected : Manifest[_] = manifest[Seq[String]]
 
-    //actual.toString mustEqual expected.toString
-    //actual mustEqual expected
+      1 mustEqual 1
+      //actual.toString mustEqual expected.toString
+      //actual mustEqual expected
+    }
   }
 }
