@@ -21,7 +21,7 @@ object AutographBook {
 
   def sigFromType(tpe: Class[_]) = sigBytesFromType(tpe) map (sigFromBytes)
 
-  def symsFromSig(s: ScalaSig) = s.topLevelClasses ++ s.topLevelObjects
+  def topLevelSymsFromSig(s: ScalaSig) = s.topLevelClasses ++ s.topLevelObjects
 
   def decompile(s: ScalaSig) =
     tools.scalap.Main.parseScalaSignature(s, false)
@@ -44,6 +44,7 @@ object AutographBook {
   def resolveExternal(path: String) = {
     resolveClassAndRemainder(path) map { resolv =>
       val (cls, remainder) = resolv
+      val subparts = remainder split '.'
       val sig = sigFromType(cls)
       val syms = sig.toSeq flatMap { _.symbols } collect {
         case sym: AliasSymbol if sym.name == remainder => sym

@@ -1,4 +1,9 @@
 package scalaj.reflect.targets;
 class TweedleDum {
-  val member = (new TweedleDee).getInner
+  class InnerDum {
+    val member = "XXX"
+  }
+
+  type InnerT = InnerDum
+  def getInner: InnerT = new InnerDum
 }

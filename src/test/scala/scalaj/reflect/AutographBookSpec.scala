@@ -17,7 +17,7 @@ class AutographBookSpec extends SpecificationWithJUnit  {
     println(decompiledText)
     println("=====")
 
-    val syms = sig map (symsFromSig) getOrElse Nil
+    val syms = sig map (topLevelSymsFromSig) getOrElse Nil
 
     val mirrors = syms map (Mirror.of)
     mirrors collect { case mcm: MemberContainerMirror => mcm } foreach { mcm =>

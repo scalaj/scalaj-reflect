@@ -1,8 +1,10 @@
 package scalaj.reflect.targets
 
 class TweedleDee {
-  class Inner {
-    val member = "XXX"
+  class InnerDee {
+    val member = (new TweedleDum).getInner
   }
-  def getInner = new Inner
+
+  type InnerT = InnerDee
+  def getInner: InnerT = new InnerDee
 }

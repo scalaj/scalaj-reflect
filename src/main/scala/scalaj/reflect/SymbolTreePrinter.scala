@@ -1,14 +1,21 @@
 package scalaj.reflect
 import tools.scalap.scalax.rules.scalasig.{Type => SymType, _}
 
+object SymbolTreePrinter extends SymbolTreePrinter {
+  def withoutOwners = new SymbolTreePrinter {
+    override def mkTree[T](input: T) = (new Run).mkTree(input)(Context(false, true))
+  } 
+}
 
-object SymbolTreePrinter {
+class SymbolTreePrinter {
   def quote(s: String) = "\"" + s + "\""
 
-  def mkTree[T](input: T) = (new Run).mkTree(input)
+  def mkTree[T](input: T) =
+    (new Run).mkTree(input)
 
-  case class Context(skipChildren: Boolean = false)  {
+  case class Context(skipChildren: Boolean = false, skipOwner: Boolean = false)  {
     def withoutChildren: Context = this.copy(skipChildren=true)
+    def withoutOwner: Context = this.copy(skipOwner=true)
   }
 
   class Run {
@@ -125,8 +132,8 @@ object SymbolTreePrinter {
       case ExternalSymbol(name, parent, entry) =>
         quote(sym.path) +
           " (external #" + entry.index + " type = " + entryTypeName(entry.entryType) + ")" +
-          optNest("parent"->parent)(ctx.withoutChildren) +
-          (if(!ctx.skipChildren) nestAll("child"->sym.children) else "")
+          optNest("parent"->parent)(ctx.withoutChildren)
+          //(if(!ctx.skipChildren) nestAll("child"->sym.children) else "")
 
       case sym @ TypeSymbol(_) => "TypeSymbol" + addSymbolInfo(sym)
       case sym @ AliasSymbol(_) => "AliasSymbol" + addSymbolInfo(sym)
@@ -141,7 +148,7 @@ object SymbolTreePrinter {
       val SymbolInfo(name, owner, flags, privateWithin, info, entry) = sym.symbolInfo
       " name = " + quote(name) + " (entry #" + entry.index + ")" +
       nest("path"->quote(sym.path)) +
-      nest("owner"->owner)(ctx.withoutChildren) +
+      { if (ctx.skipOwner) "" else nest("owner"->owner)(ctx.withoutChildren) } +
       nest("flags/info"->(flags.toString + " / " + info.toString)) +
       optNest("privateWithin"->privateWithin) +
       nest("infoType"->sym.infoType) +

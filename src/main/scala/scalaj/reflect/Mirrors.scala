@@ -5,6 +5,7 @@ import java.lang.Class
 import java.lang.reflect.{Type => JType}
 
 import Collatable._
+import reflect.Manifest
 
 /**
  * Mirrors symbols; anything with a name that can be referenced elsewhere
@@ -22,6 +23,24 @@ object Mirror {
   }
 
   def of(sym: Symbol): Mirror = cache.getOrElseUpdate(sym, generateFor(sym))
+  def ofClass[T: ClassManifest]: Option[ClassMirror] = {
+    val tpe = classManifest[T].erasure
+    val sig = AutographBook.sigFromType(tpe)
+
+    val classes = sig map { _.topLevelClasses }
+    val sym = classes flatMap { _ find (_.name == tpe.getSimpleName) }
+    sym map {Mirror of} collect { case cm: ClassMirror => cm}
+  }
+
+  def ofObject[T <: AnyRef with Singleton](obj: T): Option[ObjectMirror] = {
+    val tpe = obj.getClass
+    val sig = AutographBook.sigFromType(tpe)
+
+    val objects = sig map { _.topLevelObjects }
+    val sym = objects flatMap { _ find (_.name == tpe.getName) }
+    sym map {Mirror of} collect { case cm: ObjectMirror => cm}
+  }
+
 }
 
 sealed trait Mirror
@@ -54,7 +73,7 @@ sealed trait SymbolMirror extends NamedMirror {
 sealed trait TypedSymbolMirror extends SymbolMirror {
   def sym: SymbolInfoSymbol
   def symType = TypeMirror(sym.infoType)
-  def javaType = symType.toJavaType
+  def manifest = symType.toManifest
 }
 
 case class TypeSymbolMirror(sym: TypeSymbol) extends SymbolMirror {
@@ -76,12 +95,12 @@ object TypeMirror {
 
 sealed trait TypeMirror extends Mirror {
   def tpe: SymType
-  def toJavaType: JType
+  def toManifest: Manifest[_]
   override def toString = "<<symbol type:" + tpe.getClass.getName + ">>"
 }
 
 case class RawTypeMirror(tpe: SymType) extends TypeMirror {
-  def toJavaType: JType = tpe match {
+  def toManifest: Manifest[_] = tpe match {
     case ThisType(symbol) => error("todo")
     case SingleType(typeRef, symbol) => error("todo")
     case ConstantType(constant) => error("todo")
@@ -106,9 +125,9 @@ case class SingleTypeMirror(tpe: SingleType) extends TypeMirror with NamedMirror
   val name = tpe.symbol.name
   val path = tpe.symbol.path
   override def toString = name
-  def toJavaType: JType = {
-    println("fetching Java type for: " + path)
-    Class.forName(path)
+  def toManifest: Manifest[_] = {
+    println("fetching Manifest for: " + path)
+    Manifest.classType(Class.forName(path))
   }
 }
 
@@ -116,9 +135,9 @@ case class TypeRefMirror(tpe: TypeRefType) extends TypeMirror with NamedMirror {
   val name = tpe.symbol.name
   val path = tpe.symbol.path
   override def toString = name
-  def toJavaType: JType = {
+  def toManifest: Manifest[_] = {
     println("fetching Java type for: " + path)
-    Class.forName(path)
+    Manifest.classType(Class.forName(path))
   }
 
 }
@@ -128,7 +147,7 @@ case class PolyTypeMirror(tpe: PolyType) extends TypeMirror {
   val rawSymbols = tpe.symbols
   val symbols = rawSymbols map { SymbolMirror(_) }
   override def toString = symbols.mkString("[", ", ", "]") + typeRef.toString
-  def toJavaType: JType = error("todo")
+  def toManifest: Manifest[_] = error("todo")
 }
 
 /**
