@@ -83,6 +83,10 @@ case class TypeSymbolMirror(sym: TypeSymbol) extends SymbolMirror {
 case class RawSymbolMirror(sym: Symbol) extends SymbolMirror
 
 
+////////////////////////
+// TYPE MIRRORS
+//
+
 object TypeMirror {
   def apply(tpe: SymType) = tpe match {
 //    case mt: MethodType => MethodMirror(mt)
@@ -149,6 +153,11 @@ case class PolyTypeMirror(tpe: PolyType) extends TypeMirror {
   override def toString = symbols.mkString("[", ", ", "]") + typeRef.toString
   def toManifest: Manifest[_] = error("todo")
 }
+
+
+////////////////////////
+// SYMBOL MIRRORS
+//
 
 /**
  * Anything that can hold *publicly visible* members.
