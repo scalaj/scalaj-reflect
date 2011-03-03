@@ -1,11 +1,6 @@
 package scalaj.reflect
 
-//give the wrangler a short name, don't import methods as we want full control without using them as implicits
-import scalaj.reflect.{TypeWrangler => wrangler}
 import org.specs.SpecificationWithJUnit
-
-import AutographBook._
-import tools.scalap.scalax.rules.scalasig._
 
 class SymbolTreePrinterSpec extends SpecificationWithJUnit  {
   "a symbol tree printer" should {
@@ -39,6 +34,18 @@ class SymbolTreePrinterSpec extends SpecificationWithJUnit  {
       val paramStrings = params map {p => p.name + ": " + p.symType.toString}
       val actualTree = SymbolTreePrinter.withoutOwners mkTree params.head
       compareLines(actualTree, ExpectedPrintTrees.genericMethodArg)
+    }
+
+    "print tree of a simple class" in {
+      val classMirror = Mirror.ofClass[targets.BasicSample].get
+      val actualTree = SymbolTreePrinter mkTree classMirror
+      compareLines(actualTree, ExpectedPrintTrees.basicSampleClass)
+    }
+
+    "print tree of a polymorphic class" in {
+      val classMirror = Mirror.ofClass[targets.PolymorphicSample[_]].get
+      val actualTree = SymbolTreePrinter mkTree classMirror
+      compareLines(actualTree, ExpectedPrintTrees.polymorphicSampleClass)
     }
 
   //  "print tree with nested class" in {

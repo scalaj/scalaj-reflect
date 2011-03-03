@@ -5,7 +5,7 @@ import java.lang.Class
 import java.lang.reflect.{Type => JType}
 
 import Collatable._
-import reflect.Manifest
+import reflect.{Manifest, NoManifest}
 
 /**
  * Mirrors symbols; anything with a name that can be referenced elsewhere
@@ -45,6 +45,110 @@ object Mirror {
 
 sealed trait Mirror
 sealed trait NamedMirror extends Mirror { def name: String }
+
+
+////////////////////////
+// TYPE MIRRORS
+//
+
+object TypeMirror {
+  def apply(tpe: SymType) = tpe match {
+//    case mt: MethodType => MethodMirror(mt)
+    case trt: TypeRefType => TypeRefMirror(trt)
+    case st: SingleType => SingleTypeMirror(st)
+    case pt: PolyType => PolyTypeMirror(pt)
+    case x => RawTypeMirror(x)
+  }
+}
+
+sealed trait TypeMirror extends Mirror {
+  def tpe: SymType
+  def toManifest[T <: AnyRef]: Manifest[T]
+  override def toString = "<<symbol type:" + tpe.getClass.getName + ">>"
+}
+
+case class RawTypeMirror(tpe: SymType) extends TypeMirror {
+  def toManifest[T <: AnyRef]: Manifest[T] = tpe match {
+    case ThisType(symbol) => error("todo - ThisType manifest")
+    case SingleType(typeRef, symbol) => error("todo - SingleType manifest")
+    case ConstantType(constant) => error("todo - ConstantType manifest")
+    //case TypeRefType(prefix, symbol, typeArgs) => ...
+    case TypeBoundsType(lower, upper) =>
+      val lbound = TypeMirror(lower).toManifest
+      val ubound = TypeMirror(upper).toManifest
+      Manifest.wildcardType(lbound, ubound)
+    case RefinedType(classSym, typeRefs) => error("todo - RefinedType manifest")
+    case ClassInfoType(symbol, typeRefs) =>
+      //todo: check for poly
+      Manifest.classType(Class.forName(symbol.path))
+      //error("todo - ClassInfoType manifest")
+    case ClassInfoTypeWithCons(symbol, typeRefs, cons) => error("todo - ClassInfoTypeWithCons manifest")
+    case MethodType(resultType, paramSymbols) => error("todo - MethodType manifest")
+    //case PolyType(typeRef, symbols) => error("todo")
+    case PolyTypeWithCons(typeRef, symbols, cons) => error("todo - PolyTypeWithCons manifest")
+    case ImplicitMethodType(resultType, paramSymbols) => error("todo - ImplicitMethodType manifest")
+    case AnnotatedType(typeRef, attribTreeRefs) => error("todo - AnnotatedType manifest")
+    case AnnotatedWithSelfType(typeRef, symbol, attribTreeRefs) => error("todo - AnnotatedWithSelfType manifest")
+    case DeBruijnIndexType(typeLevel, typeIndex) => error("todo - DeBruijnIndexType manifest")
+    case ExistentialType(typeRef, symbols) => error("todo - ExistentialType manifest")
+  }
+}
+
+case class SingleTypeMirror(tpe: SingleType) extends TypeMirror with NamedMirror {
+//  println("SingleTypeMirror for type " + tpe + " with symbol " + tpe.symbol + " of class " + tpe.symbol.getClass)
+  val name = tpe.symbol.name
+  val path = tpe.symbol.path
+  override def toString = name
+  def toManifest[T <: AnyRef]: Manifest[T] = {
+    println("fetching Manifest for: " + path)
+    Manifest.classType(Class.forName(path))
+  }
+}
+
+case class TypeRefMirror(tpe: TypeRefType) extends TypeMirror with NamedMirror {
+  val name = tpe.symbol.name
+  val path = tpe.symbol.path
+  override def toString = name
+  def toManifest[T <: AnyRef]: Manifest[T] = {
+    println("fetching Java type for: " + path)
+    path match {
+      case "scala.Nothing" => Manifest.Nothing.asInstanceOf[Manifest[T]]
+      case "scala.Any" => Manifest.Any.asInstanceOf[Manifest[T]]
+      case _ => Manifest.classType(Class.forName(path))
+    }
+  }
+
+}
+
+case class PolyTypeMirror(tpe: PolyType) extends TypeMirror {
+  val typeRef = TypeMirror(tpe.typeRef)
+  val rawSymbols = tpe.symbols
+  val symbols = rawSymbols map { SymbolMirror(_) }
+  override def toString = symbols.mkString("[", ", ", "]") + typeRef.toString
+  def toManifest[T <: AnyRef]: Manifest[T] = {
+    val symbolTypes = symbols collect {
+      case sym: TypedSymbolMirror => sym.symType
+    }
+    if (symbolTypes.size < symbols.size) {
+      println("untyped symbol in PolyType signature")
+    }
+
+    val symbolManifests = symbolTypes map {_.toManifest}
+
+    val rawClass = tpe.typeRef match {
+      case cit: ClassInfoType =>
+        Class.forName(cit.symbol.path).asInstanceOf[Class[T]]
+      case _ => error("can only extract a manifest from a PolyType wrapping a ClassInfoType, found " + tpe.typeRef)
+    }
+    Manifest.classType(rawClass, symbolManifests.head, symbolManifests.tail: _*)
+  }
+}
+
+
+////////////////////////
+// SYMBOL MIRRORS
+//
+
 sealed trait MemberMirror extends NamedMirror { def isPrivate: Boolean }
 
 /**
@@ -76,88 +180,11 @@ sealed trait TypedSymbolMirror extends SymbolMirror {
   def manifest = symType.toManifest
 }
 
-case class TypeSymbolMirror(sym: TypeSymbol) extends SymbolMirror {
-  override def toString = name
-}
-
 case class RawSymbolMirror(sym: Symbol) extends SymbolMirror
 
-
-////////////////////////
-// TYPE MIRRORS
-//
-
-object TypeMirror {
-  def apply(tpe: SymType) = tpe match {
-//    case mt: MethodType => MethodMirror(mt)
-    case trt: TypeRefType => TypeRefMirror(trt)
-    case st: SingleType => SingleTypeMirror(st)
-    case pt: PolyType => PolyTypeMirror(pt)
-    case x => RawTypeMirror(x)
-  }
-}
-
-sealed trait TypeMirror extends Mirror {
-  def tpe: SymType
-  def toManifest: Manifest[_]
-  override def toString = "<<symbol type:" + tpe.getClass.getName + ">>"
-}
-
-case class RawTypeMirror(tpe: SymType) extends TypeMirror {
-  def toManifest: Manifest[_] = tpe match {
-    case ThisType(symbol) => error("todo")
-    case SingleType(typeRef, symbol) => error("todo")
-    case ConstantType(constant) => error("todo")
-    //case TypeRefType(prefix, symbol, typeArgs) => ...
-    case TypeBoundsType(lower, upper) => error("todo")
-    case RefinedType(classSym, typeRefs) => error("todo")
-    case ClassInfoType(symbol, typeRefs) => error("todo")
-    case ClassInfoTypeWithCons(symbol, typeRefs, cons) => error("todo")
-    case MethodType(resultType, paramSymbols) => error("todo")
-    //case PolyType(typeRef, symbols) => error("todo")
-    case PolyTypeWithCons(typeRef, symbols, cons) => error("todo")
-    case ImplicitMethodType(resultType, paramSymbols) => error("todo")
-    case AnnotatedType(typeRef, attribTreeRefs) => error("todo")
-    case AnnotatedWithSelfType(typeRef, symbol, attribTreeRefs) => error("todo")
-    case DeBruijnIndexType(typeLevel, typeIndex) => error("todo")
-    case ExistentialType(typeRef, symbols) => error("todo")
-  }
-}
-
-case class SingleTypeMirror(tpe: SingleType) extends TypeMirror with NamedMirror {
-//  println("SingleTypeMirror for type " + tpe + " with symbol " + tpe.symbol + " of class " + tpe.symbol.getClass)
-  val name = tpe.symbol.name
-  val path = tpe.symbol.path
+case class TypeSymbolMirror(sym: TypeSymbol) extends TypedSymbolMirror {
   override def toString = name
-  def toManifest: Manifest[_] = {
-    println("fetching Manifest for: " + path)
-    Manifest.classType(Class.forName(path))
-  }
 }
-
-case class TypeRefMirror(tpe: TypeRefType) extends TypeMirror with NamedMirror {
-  val name = tpe.symbol.name
-  val path = tpe.symbol.path
-  override def toString = name
-  def toManifest: Manifest[_] = {
-    println("fetching Java type for: " + path)
-    Manifest.classType(Class.forName(path))
-  }
-
-}
-
-case class PolyTypeMirror(tpe: PolyType) extends TypeMirror {
-  val typeRef = TypeMirror(tpe.typeRef)
-  val rawSymbols = tpe.symbols
-  val symbols = rawSymbols map { SymbolMirror(_) }
-  override def toString = symbols.mkString("[", ", ", "]") + typeRef.toString
-  def toManifest: Manifest[_] = error("todo")
-}
-
-
-////////////////////////
-// SYMBOL MIRRORS
-//
 
 /**
  * Anything that can hold *publicly visible* members.
@@ -191,7 +218,7 @@ abstract class MemberContainerMirror extends SymbolMirror {
   //lazy val publicMembers: Seq[NamedMirror] =
 }
 
-case class ClassMirror(sym: ClassSymbol) extends MemberContainerMirror {
+case class ClassMirror(sym: ClassSymbol) extends MemberContainerMirror with TypedSymbolMirror {
   val memberSymbols = sym.children
 
   val parent = sym.parent

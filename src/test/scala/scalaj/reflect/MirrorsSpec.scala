@@ -61,6 +61,20 @@ class MirrorsSpec  extends SpecificationWithJUnit {
       tgtMirror.name mustEqual "BasicSample"
       tgtMirror.qualifiedName mustEqual "scalaj.reflect.targets.BasicSample"
     }
+
+    "generate a manifest for a simple (monomorphic) mirrored class" in {
+      val mani = tgtMirror.manifest
+      mani mustEqual manifest[targets.BasicSample]
+    }
+
+    "generate a manifest for a polymorphic mirrored class" in {
+      val mirror = Mirror.ofClass[targets.PolymorphicSample[_]].get
+      val actual = mirror.manifest
+      val expected = manifest[targets.PolymorphicSample[_]]
+      println("reflected manifest: " + actual)
+      println("expected manifest: " + expected)
+      actual mustEqual expected
+    }
   }
 
 }
