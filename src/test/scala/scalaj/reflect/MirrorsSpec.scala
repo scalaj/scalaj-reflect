@@ -8,6 +8,11 @@ class MirrorsSpec  extends SpecificationWithJUnit {
   val tgtMirror = Mirror.ofClass[targets.BasicSample].get
 
   "a class mirror" should {
+    "reflect a dynamically sourced Class[_] instance" in {
+      val dynMirror = Mirror.ofClass(Class.forName("scalaj.reflect.targets.BasicSample"))
+      dynMirror map { m => m.name mustEqual "BasicSample" }
+    }
+
     "locate all defs" in {
 
       val defs = tgtMirror.allDefs map (_.name)
@@ -71,8 +76,6 @@ class MirrorsSpec  extends SpecificationWithJUnit {
       val mirror = Mirror.ofClass[targets.PolymorphicSample[_]].get
       val actual = mirror.manifest
       val expected = manifest[targets.PolymorphicSample[_]]
-      println("reflected manifest: " + actual)
-      println("expected manifest: " + expected)
       actual mustEqual expected
     }
   }

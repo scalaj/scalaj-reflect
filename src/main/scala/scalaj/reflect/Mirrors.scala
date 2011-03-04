@@ -32,6 +32,14 @@ object Mirror {
     sym map {Mirror of} collect { case cm: ClassMirror => cm}
   }
 
+  def ofClass[T](clazz: Class[T]): Option[ClassMirror] = {
+    val sig = AutographBook.sigFromType(clazz)
+
+    val classes = sig map { _.topLevelClasses }
+    val sym = classes flatMap { _ find (_.name == clazz.getSimpleName) }
+    sym map {Mirror of} collect { case cm: ClassMirror => cm}
+  }
+
   def ofObject[T <: AnyRef with Singleton](obj: T): Option[ObjectMirror] = {
     val tpe = obj.getClass
     val sig = AutographBook.sigFromType(tpe)
