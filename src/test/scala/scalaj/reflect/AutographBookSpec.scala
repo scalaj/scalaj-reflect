@@ -21,7 +21,7 @@ class AutographBookSpec extends SpecificationWithJUnit  {
 
       val syms = sig map (topLevelSymsFromSig) getOrElse Nil
 
-      val mirrors = syms map (Mirror.of)
+      val mirrors = syms map (Mirror.ofSymbol)
 //    mirrors collect { case mcm: MemberContainerMirror => mcm } foreach { mcm =>
 //      println(mcm.toString)
 //      mcm.allNaturalMethods map (_.toString) foreach {println}

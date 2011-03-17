@@ -22,14 +22,15 @@ object Mirror {
     case x => RawSymbolMirror(x)
   }
 
-  def of(sym: Symbol): Mirror = cache.getOrElseUpdate(sym, generateFor(sym))
+  def ofSymbol(sym: Symbol): Mirror = cache.getOrElseUpdate(sym, generateFor(sym))
+
   def ofClass[T: ClassManifest]: Option[ClassMirror] = {
     val tpe = classManifest[T].erasure
     val sig = AutographBook.sigFromType(tpe)
 
     val classes = sig map { _.topLevelClasses }
     val sym = classes flatMap { _ find (_.name == tpe.getSimpleName) }
-    sym map {Mirror of} collect { case cm: ClassMirror => cm}
+    sym map {Mirror ofSymbol} collect { case cm: ClassMirror => cm}
   }
 
   def ofClass[T](clazz: Class[T]): Option[ClassMirror] = {
@@ -37,7 +38,7 @@ object Mirror {
 
     val classes = sig map { _.topLevelClasses }
     val sym = classes flatMap { _ find (_.name == clazz.getSimpleName) }
-    sym map {Mirror of} collect { case cm: ClassMirror => cm}
+    sym map {Mirror ofSymbol} collect { case cm: ClassMirror => cm}
   }
 
   def ofObject[T <: AnyRef with Singleton](obj: T): Option[ObjectMirror] = {
@@ -46,7 +47,7 @@ object Mirror {
 
     val objects = sig map { _.topLevelObjects }
     val sym = objects flatMap { _ find (_.name == tpe.getName) }
-    sym map {Mirror of} collect { case cm: ObjectMirror => cm}
+    sym map {Mirror ofSymbol} collect { case cm: ObjectMirror => cm}
   }
 
 }
@@ -152,6 +153,12 @@ case class PolyTypeMirror(tpe: PolyType) extends TypeMirror {
   }
 }
 
+case class RefinedTypeMirror(underlying: TypeMirror, refinedTypes: List[Manifest]) extends TypeMirror {
+  def tpe = underlying.tpe
+  def toManifest[T <: AnyRef]: Manifest[T] =
+    Manifest.classType(underlying.toManifest.erasure, refinedTypes.head, refinedTypes.tail)
+
+}
 
 ////////////////////////
 // SYMBOL MIRRORS
@@ -185,7 +192,13 @@ sealed trait SymbolMirror extends NamedMirror {
 sealed trait TypedSymbolMirror extends SymbolMirror {
   def sym: SymbolInfoSymbol
   def symType = TypeMirror(sym.infoType)
-  def manifest = symType.toManifest
+  def manifest[T <: AnyRef] = symType.toManifest[T]
+  def typeParams: Seq[Manifest[_]] = manifest.typeArguments
+}
+
+sealed trait Reifiable[Repr <: Reifiable[_]] {
+  self: TypedSymbolMirror =>
+  def reify(reifiedParams: Manifest[_]*) : Repr
 }
 
 case class RawSymbolMirror(sym: Symbol) extends SymbolMirror
@@ -226,12 +239,14 @@ abstract class MemberContainerMirror extends SymbolMirror {
   //lazy val publicMembers: Seq[NamedMirror] =
 }
 
-case class ClassMirror(sym: ClassSymbol) extends MemberContainerMirror with TypedSymbolMirror {
+case class ClassMirror(sym: ClassSymbol) extends MemberContainerMirror with TypedSymbolMirror with Reifiable[ClassMirror] {
   val memberSymbols = sym.children
 
   val parent = sym.parent
   val qualifiedName = (parent map {_.path + "."} getOrElse "") + sym.name
   lazy val javaClass = Class.forName(qualifiedName)
+
+  def reify(reifiedParams: Manifest[_]*) : ClassMirror = error("not impl")
 
   lazy val constructors = allNaturalMethods filter {_.isConstructor} map {ConstructorMirror(this,_)}
 

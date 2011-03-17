@@ -3,6 +3,7 @@ package scalaj.reflect
 
 import scalaj.reflect.{TypeWrangler => wrangler}
 import org.specs.SpecificationWithJUnit
+import reflect.Manifest
 
 class MirrorsSpec  extends SpecificationWithJUnit {
   val tgtMirror = Mirror.ofClass[targets.BasicSample].get
@@ -67,17 +68,46 @@ class MirrorsSpec  extends SpecificationWithJUnit {
       tgtMirror.qualifiedName mustEqual "scalaj.reflect.targets.BasicSample"
     }
 
+    "locate default type params for a generic polymorphic mirrored class" in {
+      val mirror = Mirror.ofClass[targets.PolymorphicSample[_]].get
+      val actual = mirror.typeParams
+      val expected = Seq(Manifest.wildcardType(Manifest.Nothing, Manifest.Any))
+      actual mustEqual expected
+    }
+
     "generate a manifest for a simple (monomorphic) mirrored class" in {
       val mani = tgtMirror.manifest
       mani mustEqual manifest[targets.BasicSample]
     }
 
-    "generate a manifest for a polymorphic mirrored class" in {
+    "generate a manifest for a wildcard polymorphic mirrored class" in {
       val mirror = Mirror.ofClass[targets.PolymorphicSample[_]].get
       val actual = mirror.manifest
       val expected = manifest[targets.PolymorphicSample[_]]
       actual mustEqual expected
     }
+
+    "directly refine a generic polymorphic mirrored class" in {
+      val mirror = Mirror.ofClass[targets.PolymorphicSample[_]].get
+      val refined = mirror.reify(manifest[Int])
+      val actual = refined.manifest
+      val expected = manifest[targets.PolymorphicSample[Int]]
+      actual mustEqual expected
+    }
+
+    "generate a manifest for a refined polymorphic mirrored class" in {
+      val mirror = Mirror.ofClass[targets.PolymorphicSample[Int]].get
+      val actual = mirror.manifest
+      val expected = manifest[targets.PolymorphicSample[Int]]
+      actual mustEqual expected
+    }
+
+//    "generate a manifest for a nested polymorphic mirrored class" in {
+//      val mirror = Mirror.ofClass[targets.NestedPolymorphicSample[Int]#Inner].get
+//      val actual = mirror.manifest
+//      val expected = manifest[targets.NestedPolymorphicSample[Int]#Inner]
+//      actual mustEqual expected
+//    }
   }
 
 }
