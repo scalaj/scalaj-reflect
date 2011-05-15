@@ -1,5 +1,8 @@
 .DS_Store
 .idea/
+.classpath
+.project
+.scala_dependencies
 */log/
 */tmp/
 *~
