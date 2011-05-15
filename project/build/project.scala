@@ -1,6 +1,11 @@
 import sbt._
+import de.element34.sbteclipsify._
 
-class ScalajProject(info: ProjectInfo) extends DefaultProject(info) with IdeaProject with posterous.Publish {
+
+class ScalajProject(info: ProjectInfo) extends DefaultProject(info)
+with IdeaProject
+with Eclipsify
+with posterous.Publish {
   override def compileOptions = Seq(Deprecation, Unchecked)
 
   //Dependencies
